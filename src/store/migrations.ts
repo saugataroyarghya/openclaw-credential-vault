@@ -50,7 +50,6 @@ export function runMigrations(db: Database.Database): void {
       provider        TEXT    NOT NULL,
       action          TEXT    NOT NULL,
       tool_name       TEXT,
-      mcp_server      TEXT,
       timestamp       INTEGER NOT NULL,
       metadata        TEXT
     );

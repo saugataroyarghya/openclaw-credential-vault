@@ -11,48 +11,17 @@ export type OAuthProviderConfig = {
   clientId: string | { env: string };
   clientSecret: string | { env: string };
   pkce?: boolean;
-  inject?: InjectionStrategy;
   headerName?: string;
   headerPrefix?: string;
-  queryParamName?: string;
 };
 
 export type ApiKeyProviderConfig = {
   type: "api_key";
-  inject?: InjectionStrategy;
   headerName?: string;
   headerPrefix?: string;
-  queryParamName?: string;
 };
 
 export type ProviderConfig = OAuthProviderConfig | ApiKeyProviderConfig;
-
-// ── Injection ──
-
-export type InjectionStrategy = "bearer" | "header" | "query";
-
-export type InjectionParams = {
-  strategy: InjectionStrategy;
-  headerName?: string;
-  headerPrefix?: string;
-  queryParamName?: string;
-};
-
-// ── MCP Server Configuration ──
-
-export type McpAuthConfig = {
-  provider: string;
-  inject?: InjectionStrategy;
-  headerName?: string;
-  headerPrefix?: string;
-};
-
-export type McpServerConfig = {
-  url: string;
-  transport?: "streamable-http" | "sse";
-  auth?: McpAuthConfig;
-  toolPrefix?: string;
-};
 
 // ── User Policies ──
 
@@ -82,7 +51,6 @@ export type ChannelPolicy = {
 
 export type VaultPluginConfig = {
   providers: Record<string, ProviderConfig>;
-  mcpServers?: Record<string, McpServerConfig>;
   toolProviderMap?: Record<string, string | string[]>;
   userPolicies?: Record<string, UserPolicy>;
   channelPolicies?: Record<string, ChannelPolicy>;
@@ -151,7 +119,6 @@ export type AuditLogRow = {
   provider: string;
   action: AuditAction;
   tool_name: string | null;
-  mcp_server: string | null;
   timestamp: number;
   metadata: string | null;
 };

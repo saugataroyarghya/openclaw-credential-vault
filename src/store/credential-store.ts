@@ -275,7 +275,6 @@ export class CredentialStore {
     provider: string;
     action: AuditAction;
     toolName?: string;
-    mcpServer?: string;
     metadata?: string;
   }): void {
     const {
@@ -284,15 +283,14 @@ export class CredentialStore {
       provider,
       action,
       toolName,
-      mcpServer,
       metadata,
     } = params;
 
     const stmt = this.db.prepare(`
       INSERT INTO audit_log
         (agent_id, channel_user_id, provider, action,
-         tool_name, mcp_server, timestamp, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         tool_name, timestamp, metadata)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -301,7 +299,6 @@ export class CredentialStore {
       provider,
       action,
       toolName ?? null,
-      mcpServer ?? null,
       Date.now(),
       metadata ?? null,
     );
