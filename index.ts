@@ -125,6 +125,10 @@ const plugin = {
         }),
         async execute(_id: string, params: any) {
           const rawUserId = ctx.requesterSenderId;
+
+          // Debug: log all identity fields so we can verify the match
+          log(`[credential-vault] vault_fetch identity: requesterSenderId=${rawUserId}, messageChannel=${ctx.messageChannel}, sessionKey=${ctx.sessionKey}, agentId=${ctx.agentId}`);
+
           if (!rawUserId) {
             return { content: [{ type: "text", text: "Cannot identify user. No sender context available." }] };
           }
@@ -298,7 +302,9 @@ const plugin = {
     const scopeSenderId = (ctx: any) => {
       const channel = ctx.channel ?? ctx.channelId ?? "unknown";
       const sender = ctx.senderId ?? ctx.from ?? "";
-      return `${channel}:${sender}`;
+      const scoped = `${channel}:${sender}`;
+      log(`[credential-vault] command identity: senderId=${sender}, channel=${channel}, scoped=${scoped}, channelId=${ctx.channelId}, from=${ctx.from}, accountId=${ctx.accountId}`);
+      return scoped;
     };
 
     api.registerCommand({
