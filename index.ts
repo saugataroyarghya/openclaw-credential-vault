@@ -307,6 +307,17 @@ const plugin = {
       return scoped;
     };
 
+    // Resolve agentId consistently — command context doesn't have agentId directly,
+    // so we parse it from the session key or fall back to "main"
+    const resolveAgentId = (ctx: any): string => {
+      if (ctx.agentId) return ctx.agentId;
+      // Parse from session key: "agent:main:..."
+      const sk = ctx.sessionKey ?? "";
+      const parts = sk.split(":");
+      if (parts[0] === "agent" && parts[1]) return parts[1];
+      return ctx.accountId ?? "main";
+    };
+
     api.registerCommand({
       name: "connect",
       description: "Connect an external service (OAuth or API key)",
@@ -316,7 +327,7 @@ const plugin = {
         handleConnect(
           {
             args: ctx.args ?? ctx.commandBody ?? "",
-            agentId: ctx.accountId ?? "",
+            agentId: resolveAgentId(ctx),
             senderId: scopeSenderId(ctx),
             channelId: ctx.channel ?? ctx.channelId ?? "",
           },
@@ -333,7 +344,7 @@ const plugin = {
         handleDisconnect(
           {
             args: ctx.args ?? ctx.commandBody ?? "",
-            agentId: ctx.accountId ?? "",
+            agentId: resolveAgentId(ctx),
             senderId: scopeSenderId(ctx),
             channelId: ctx.channel ?? ctx.channelId ?? "",
           },
@@ -350,7 +361,7 @@ const plugin = {
         handleConnections(
           {
             args: ctx.args ?? "",
-            agentId: ctx.accountId ?? "",
+            agentId: resolveAgentId(ctx),
             senderId: scopeSenderId(ctx),
             channelId: ctx.channel ?? ctx.channelId ?? "",
           },
