@@ -18,12 +18,20 @@ export function buildAuthorizationUrl(params: {
 
   const scopes = scopeOverrides ?? provider.scopes;
   if (scopes && scopes.length > 0) {
-    url.searchParams.set("scope", scopes.join(" "));
+    const separator = provider.authorize?.scopeSeparator ?? " ";
+    url.searchParams.set("scope", scopes.join(separator));
   }
 
   if (pkce) {
     url.searchParams.set("code_challenge", pkce.challenge);
     url.searchParams.set("code_challenge_method", pkce.method);
+  }
+
+  // Extra authorize params (e.g., Notion's owner=user, Google's access_type=offline)
+  if (provider.authorize?.extraParams) {
+    for (const [key, value] of Object.entries(provider.authorize.extraParams)) {
+      url.searchParams.set(key, value);
+    }
   }
 
   return url.toString();
@@ -37,25 +45,72 @@ export async function exchangeCodeForTokens(params: {
 }): Promise<OAuthTokenResponse> {
   const { provider, code, callbackUrl, codeVerifier } = params;
 
-  const body = new URLSearchParams({
-    grant_type: "authorization_code",
-    client_id: resolveConfigValue(provider.clientId),
-    client_secret: resolveConfigValue(provider.clientSecret),
+  const authMethod = provider.token?.authMethod ?? "body";
+  const bodyFormat = provider.token?.bodyFormat ?? "form";
+  const includeRedirectUri = provider.token?.includeRedirectUri ?? true;
+
+  // Build body params
+  const bodyParams: Record<string, string> = {
+    grant_type: provider.grantType === "client_credentials"
+      ? "client_credentials"
+      : "authorization_code",
     code,
-    redirect_uri: callbackUrl,
-  });
+  };
+
+  if (includeRedirectUri) {
+    bodyParams.redirect_uri = callbackUrl;
+  }
 
   if (codeVerifier) {
-    body.set("code_verifier", codeVerifier);
+    bodyParams.code_verifier = codeVerifier;
+  }
+
+  // Client credentials: in body or in Authorization header
+  if (authMethod === "body") {
+    bodyParams.client_id = resolveConfigValue(provider.clientId);
+    bodyParams.client_secret = resolveConfigValue(provider.clientSecret);
+  }
+
+  // Extra token params
+  if (provider.token?.extraParams) {
+    for (const [key, value] of Object.entries(provider.token.extraParams)) {
+      bodyParams[key] = value;
+    }
+  }
+
+  // Build headers
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+
+  if (authMethod === "basic") {
+    const clientId = resolveConfigValue(provider.clientId);
+    const clientSecret = resolveConfigValue(provider.clientSecret);
+    const encoded = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    headers["Authorization"] = `Basic ${encoded}`;
+  }
+
+  // Extra token headers
+  if (provider.token?.extraHeaders) {
+    for (const [key, value] of Object.entries(provider.token.extraHeaders)) {
+      headers[key] = value;
+    }
+  }
+
+  // Build body
+  let body: string;
+  if (bodyFormat === "json") {
+    headers["Content-Type"] = "application/json";
+    body = JSON.stringify(bodyParams);
+  } else {
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+    body = new URLSearchParams(bodyParams).toString();
   }
 
   const response = await fetch(provider.tokenUrl, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Accept: "application/json",
-    },
-    body: body.toString(),
+    headers,
+    body,
   });
 
   if (!response.ok) {

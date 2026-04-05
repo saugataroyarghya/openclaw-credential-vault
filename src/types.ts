@@ -1,7 +1,21 @@
 // ── Provider Configuration ──
 
+export type OAuthAuthorizeConfig = {
+  scopeSeparator?: " " | ",";
+  extraParams?: Record<string, string>;
+};
+
+export type OAuthTokenConfig = {
+  authMethod?: "basic" | "body" | "none";
+  bodyFormat?: "form" | "json";
+  includeRedirectUri?: boolean;
+  extraParams?: Record<string, string>;
+  extraHeaders?: Record<string, string>;
+};
+
 export type OAuthProviderConfig = {
   type: "oauth2";
+  grantType?: "authorization_code" | "client_credentials" | "pkce";
   authUrl: string;
   tokenUrl: string;
   revokeUrl?: string;
@@ -11,6 +25,8 @@ export type OAuthProviderConfig = {
   clientId: string | { env: string };
   clientSecret: string | { env: string };
   pkce?: boolean;
+  authorize?: OAuthAuthorizeConfig;
+  token?: OAuthTokenConfig;
   headerName?: string;
   headerPrefix?: string;
 };

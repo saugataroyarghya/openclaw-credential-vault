@@ -52,6 +52,7 @@ export function createVaultService(deps: VaultServiceDeps) {
             clientId: resolveConfigValue(oauthConfig.clientId),
             clientSecret: resolveConfigValue(oauthConfig.clientSecret),
             refreshToken: payload.refresh_token,
+            tokenConfig: oauthConfig.token,
           });
 
           store.updateCredentialTokens(
