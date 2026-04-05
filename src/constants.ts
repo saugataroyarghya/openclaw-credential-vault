@@ -1,0 +1,10 @@
+export const MASTER_KEY_ENV = "CREDENTIAL_VAULT_MASTER_KEY";
+export const ALGORITHM = "aes-256-gcm" as const;
+export const KEY_LENGTH = 32;
+export const IV_LENGTH = 16;
+export const SCRYPT_SALT = "openclaw-credential-vault-v1";
+export const STATE_EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
+export const TOKEN_REFRESH_BUFFER_MS = 5 * 60 * 1000; // 5 minutes before expiry
+export const REFRESH_INTERVAL_MS = 60 * 1000; // check every minute
+export const CALLBACK_PATH = "/credential-vault/oauth/callback";
+export const DEFAULT_RATE_LIMIT = 60; // per user per provider per minute
