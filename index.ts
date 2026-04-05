@@ -5,7 +5,14 @@
  * Provides OAuth, API key management, MCP server bridge, and auth gating.
  */
 
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { homedir } from "node:os";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+
+// Load .env from the plugin's own directory
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: join(__dirname, ".env") });
 import { CredentialStore } from "./src/store/credential-store.js";
 import { createCallbackHandler } from "./src/oauth/callback-handler.js";
 import { createApiKeyFormHandler, APIKEY_FORM_PATH } from "./src/api-key/web-form.js";
@@ -28,7 +35,15 @@ import { registerMetabaseTools } from "./src/tools/metabase.js";
 import type { VaultPluginConfig } from "./src/types.js";
 import { CALLBACK_PATH } from "./src/constants.js";
 
-// ── Plugin Entry ──
+// ── Resolve state directory (same logic OpenClaw uses internally) ──
+
+function getStateDir(): string {
+  const envDir = process.env.OPENCLAW_HOME || process.env.MOLTBOT_HOME;
+  if (envDir) return envDir;
+  return join(homedir(), ".openclaw");
+}
+
+// ── Plugin Entry (synchronous register — OpenClaw does not await async register) ──
 
 const plugin = {
   id: "credential-vault",
@@ -36,13 +51,13 @@ const plugin = {
   description:
     "Per-user credential vault with OAuth, API key, MCP bridge, and auth gating.",
 
-  async register(api: any) {
-    const config = api.pluginConfig as VaultPluginConfig;
+  register(api: any) {
+    const config = (api.pluginConfig ?? {}) as VaultPluginConfig;
     const log = api.logger?.info?.bind(api.logger) ?? console.log;
     const logError = api.logger?.error?.bind(api.logger) ?? console.error;
 
     // 1. Initialize encrypted credential store
-    const stateDir = api.runtime.state.resolveStateDir();
+    const stateDir = getStateDir();
     const dbPath = join(stateDir, "credential-vault", "vault.db");
     const store = new CredentialStore({ dbPath });
 
@@ -174,78 +189,85 @@ const plugin = {
     registerGoogleTools(api, store);
     registerMetabaseTools(api, store);
 
-    // 7. Discover and register MCP-bridged tools
+    // 7. MCP discovery deferred to service start (async not allowed in register)
     const mcpServers = config.mcpServers ?? {};
-    for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
-      try {
-        const tools = await discoverMcpTools(serverName, serverConfig);
-        log(
-          `[credential-vault] Discovered ${tools.length} tools from MCP server "${serverName}"`,
-        );
+    if (Object.keys(mcpServers).length > 0) {
+      api.registerService({
+        id: "credential-vault-mcp-discovery",
+        start: async () => {
+          for (const [serverName, serverConfig] of Object.entries(mcpServers)) {
+            try {
+              const tools = await discoverMcpTools(serverName, serverConfig);
+              log(
+                `[credential-vault] Discovered ${tools.length} tools from MCP server "${serverName}"`,
+              );
 
-        for (const tool of tools) {
-          api.registerTool(
-            (ctx: any) => ({
-              name: tool.prefixedName,
-              description: tool.description,
-              parameters: tool.inputSchema,
-              execute: async (
-                _id: string,
-                params: Record<string, unknown>,
-              ): Promise<string> => {
-                const authConfig = serverConfig.auth;
-                if (!authConfig) {
-                  return callMcpToolUnauthenticated({
-                    serverUrl: serverConfig.url,
-                    toolName: tool.name,
-                    toolInput: params,
-                  });
-                }
+              for (const tool of tools) {
+                api.registerTool(
+                  (ctx: any) => ({
+                    name: tool.prefixedName,
+                    description: tool.description,
+                    parameters: tool.inputSchema,
+                    execute: async (
+                      _id: string,
+                      params: Record<string, unknown>,
+                    ): Promise<string> => {
+                      const authConfig = serverConfig.auth;
+                      if (!authConfig) {
+                        return callMcpToolUnauthenticated({
+                          serverUrl: serverConfig.url,
+                          toolName: tool.name,
+                          toolInput: params,
+                        });
+                      }
 
-                const identity = parseSessionKey(ctx.sessionKey ?? "");
-                if (!identity) {
-                  throw new Error(
-                    "Cannot identify user for credential lookup.",
-                  );
-                }
+                      const identity = parseSessionKey(ctx.sessionKey ?? "");
+                      if (!identity) {
+                        throw new Error(
+                          "Cannot identify user for credential lookup.",
+                        );
+                      }
 
-                const decrypted = store.getDecryptedCredential(
-                  ctx.agentId ?? "",
-                  identity.userId,
-                  authConfig.provider,
+                      const decrypted = store.getDecryptedCredential(
+                        ctx.agentId ?? "",
+                        identity.userId,
+                        authConfig.provider,
+                      );
+
+                      if (!decrypted) {
+                        throw new Error(
+                          `Not authenticated with ${authConfig.provider}. Use /connect ${authConfig.provider}`,
+                        );
+                      }
+
+                      const credential =
+                        "access_token" in decrypted.payload
+                          ? decrypted.payload.access_token
+                          : "api_key" in decrypted.payload
+                            ? decrypted.payload.api_key
+                            : "";
+
+                      return callMcpToolAuthenticated({
+                        serverUrl: serverConfig.url,
+                        toolName: tool.name,
+                        toolInput: params,
+                        credential,
+                        authConfig,
+                      });
+                    },
+                  }),
+                  { name: tool.prefixedName },
                 );
-
-                if (!decrypted) {
-                  throw new Error(
-                    `Not authenticated with ${authConfig.provider}. Use /connect ${authConfig.provider}`,
-                  );
-                }
-
-                const credential =
-                  "access_token" in decrypted.payload
-                    ? decrypted.payload.access_token
-                    : "api_key" in decrypted.payload
-                      ? decrypted.payload.api_key
-                      : "";
-
-                return callMcpToolAuthenticated({
-                  serverUrl: serverConfig.url,
-                  toolName: tool.name,
-                  toolInput: params,
-                  credential,
-                  authConfig,
-                });
-              },
-            }),
-            { name: tool.prefixedName },
-          );
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logError(
-          `[credential-vault] Failed to initialize MCP server "${serverName}": ${msg}`,
-        );
-      }
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              logError(
+                `[credential-vault] Failed to initialize MCP server "${serverName}": ${msg}`,
+              );
+            }
+          }
+        },
+      });
     }
 
     // 8. Register background token refresh service
