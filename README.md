@@ -1,8 +1,13 @@
 # openclaw-credential-vault
 
-Per-user credential vault middleware for [OpenClaw](https://docs.openclaw.ai).
+> **Per-user OAuth + API key middleware for [OpenClaw](https://docs.openclaw.ai).** One `vault_fetch` tool, generic OAuth2 / API key flows, channel-scoped identity. The AI never sees user credentials.
 
-Provides authenticated HTTP requests via a single `vault_fetch` tool. Each user connects their own GitHub, Google, Notion, Metabase, etc. account. The AI never sees the credentials — the vault injects them at the transport layer.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
+[![OpenClaw](https://img.shields.io/badge/OpenClaw-plugin-orange.svg)](https://docs.openclaw.ai)
+[![Discord](https://img.shields.io/badge/OpenClaw-Discord-5865F2.svg)](https://discord.gg/clawd)
+
+Each chat user (Slack, Discord, Telegram, etc.) connects their own GitHub, Google, Notion, Metabase, or any other account. The vault injects the user's credential into HTTP requests at the transport layer — your AI agent never sees raw tokens. Multi-user isolation, OAuth refresh, audit logging, channel policies, all built in.
 
 Companion to [openclaw-file-guard](https://github.com/saugataroyarghya/openclaw-file-guard) — same middleware pattern, different domain.
 
