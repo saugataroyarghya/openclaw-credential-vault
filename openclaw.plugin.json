@@ -1,138 +1,136 @@
 {
   "id": "credential-vault",
   "name": "Credential Vault",
-  "description": "Generic per-user credential vault with OAuth, API key management, and auth gating for OpenClaw agents.",
+  "description": "Per-user credential vault middleware for OpenClaw. Provides vault_fetch tool, generic OAuth2/API key flows, channel-scoped identity, and audit logging.",
   "version": "0.1.0",
   "skills": ["skills/vault-admin"],
   "configSchema": {
     "type": "object",
     "properties": {
+      "callbackBaseUrl": {
+        "type": "string",
+        "description": "Base URL for OAuth callbacks. The plugin appends /credential-vault/oauth/callback. Examples: 'http://localhost:18789', 'https://auth.yourdomain.com', 'https://abc123.ngrok-free.app'."
+      },
+      "rateLimitPerUserPerMinute": {
+        "type": "number",
+        "description": "Max vault_fetch calls per user per provider per minute. Default: 60."
+      },
       "providers": {
         "type": "object",
-        "description": "OAuth and API key provider definitions.",
+        "description": "OAuth and API key provider definitions. Provider keys are referenced by vault_fetch's 'provider' parameter.",
         "additionalProperties": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": ["oauth2", "api_key"],
-              "description": "Authentication type."
-            },
-            "authUrl": {
-              "type": "string",
-              "description": "OAuth2 authorization endpoint URL."
-            },
-            "tokenUrl": {
-              "type": "string",
-              "description": "OAuth2 token exchange endpoint URL."
-            },
-            "revokeUrl": {
-              "type": "string",
-              "description": "OAuth2 token revocation endpoint URL."
-            },
-            "scopes": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Default OAuth scopes to request."
-            },
-            "maxScopes": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Maximum scopes any user can request."
-            },
-            "minScopes": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Minimum scopes required for the provider to be useful."
-            },
-            "clientId": {
-              "description": "OAuth client ID — string or { env: 'VAR_NAME' }."
-            },
-            "clientSecret": {
-              "description": "OAuth client secret — string or { env: 'VAR_NAME' }."
-            },
-            "pkce": {
-              "type": "boolean",
-              "description": "Enable PKCE for this provider."
-            },
-            "inject": {
-              "type": "string",
-              "enum": ["bearer", "header", "query"],
-              "description": "How to inject the credential into requests."
-            },
-            "headerName": {
-              "type": "string",
-              "description": "Custom header name for injection."
-            },
-            "headerPrefix": {
-              "type": "string",
-              "description": "Custom header value prefix."
-            },
-            "queryParamName": {
-              "type": "string",
-              "description": "Query parameter name for query injection."
-            }
-          },
-          "required": ["type"]
-        }
-      },
-      "mcpServers": {
-        "type": "object",
-        "description": "MCP servers to bridge — tools are auto-discovered and registered.",
-        "additionalProperties": {
-          "type": "object",
-          "properties": {
-            "url": {
-              "type": "string",
-              "description": "MCP server URL."
-            },
-            "transport": {
-              "type": "string",
-              "enum": ["streamable-http", "sse"],
-              "description": "Transport protocol."
-            },
-            "auth": {
+          "oneOf": [
+            {
               "type": "object",
-              "description": "Credential injection config for this MCP server.",
               "properties": {
-                "provider": {
+                "type": { "const": "oauth2", "description": "OAuth2 authentication." },
+                "authUrl": { "type": "string", "description": "Authorization endpoint URL." },
+                "tokenUrl": { "type": "string", "description": "Token exchange endpoint URL." },
+                "revokeUrl": { "type": "string", "description": "Token revocation endpoint URL (optional)." },
+                "grantType": {
                   "type": "string",
-                  "description": "Which provider's credential to inject."
+                  "enum": ["authorization_code", "client_credentials", "pkce"],
+                  "description": "OAuth2 grant type. Default: authorization_code."
                 },
-                "inject": {
+                "scopes": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "OAuth scopes to request."
+                },
+                "maxScopes": { "type": "array", "items": { "type": "string" } },
+                "minScopes": { "type": "array", "items": { "type": "string" } },
+                "clientId": { "description": "OAuth client ID — string or { env: 'VAR_NAME' }." },
+                "clientSecret": { "description": "OAuth client secret — string or { env: 'VAR_NAME' }." },
+                "pkce": { "type": "boolean", "description": "Enable PKCE." },
+                "authorize": {
+                  "type": "object",
+                  "description": "Customize the authorization request.",
+                  "properties": {
+                    "scopeSeparator": {
+                      "type": "string",
+                      "enum": [" ", ","],
+                      "description": "How to join multiple scopes. Default: ' '."
+                    },
+                    "extraParams": {
+                      "type": "object",
+                      "description": "Extra query params for the authorize URL (e.g., { 'access_type': 'offline', 'owner': 'user' }).",
+                      "additionalProperties": { "type": "string" }
+                    }
+                  }
+                },
+                "token": {
+                  "type": "object",
+                  "description": "Customize the token exchange request.",
+                  "properties": {
+                    "authMethod": {
+                      "type": "string",
+                      "enum": ["basic", "body", "none"],
+                      "description": "How to send client credentials. 'basic' = Authorization header. 'body' = in request body. Default: 'body'."
+                    },
+                    "bodyFormat": {
+                      "type": "string",
+                      "enum": ["form", "json"],
+                      "description": "Request body encoding. Default: 'form'."
+                    },
+                    "includeRedirectUri": {
+                      "type": "boolean",
+                      "description": "Whether to include redirect_uri in the token request. Default: true."
+                    },
+                    "extraParams": {
+                      "type": "object",
+                      "description": "Extra body params for the token request.",
+                      "additionalProperties": { "type": "string" }
+                    },
+                    "extraHeaders": {
+                      "type": "object",
+                      "description": "Extra headers for the token request.",
+                      "additionalProperties": { "type": "string" }
+                    }
+                  }
+                },
+                "headerName": {
                   "type": "string",
-                  "enum": ["bearer", "header", "query"]
+                  "description": "Header name for credential injection in vault_fetch. Default: 'Authorization'."
                 },
-                "headerName": { "type": "string" },
-                "headerPrefix": { "type": "string" }
+                "headerPrefix": {
+                  "type": "string",
+                  "description": "Header value prefix. Default: 'Bearer' for OAuth, '' for API key."
+                }
               },
-              "required": ["provider"]
+              "required": ["type", "authUrl", "tokenUrl", "clientId", "clientSecret"]
             },
-            "toolPrefix": {
-              "type": "string",
-              "description": "Prefix for registered tool names. Defaults to server key."
+            {
+              "type": "object",
+              "properties": {
+                "type": { "const": "api_key", "description": "API key authentication." },
+                "headerName": {
+                  "type": "string",
+                  "description": "Header name for credential injection. Default: 'Authorization'."
+                },
+                "headerPrefix": {
+                  "type": "string",
+                  "description": "Header value prefix. Default: '' (raw key)."
+                }
+              },
+              "required": ["type"]
             }
-          },
-          "required": ["url"]
+          ]
         }
       },
       "toolProviderMap": {
         "type": "object",
-        "description": "Maps tool name patterns to required providers. Supports wildcards (e.g., 'github_*').",
+        "description": "Maps tool name patterns to required providers. Supports wildcards (e.g., { 'github_*': 'github' }). Used for tools other than vault_fetch.",
         "additionalProperties": {}
       },
       "userPolicies": {
         "type": "object",
-        "description": "Per-user scope restrictions. Keyed by channel user ID.",
+        "description": "Per-user scope restrictions. Keyed by channel-scoped user ID (e.g., 'slack:U_INTERN').",
         "additionalProperties": {
           "type": "object",
           "additionalProperties": {
             "type": "object",
             "properties": {
-              "scopes": {
-                "type": "array",
-                "items": { "type": "string" }
-              },
+              "scopes": { "type": "array", "items": { "type": "string" } },
               "allowWrite": { "type": "boolean" }
             }
           }
@@ -140,7 +138,7 @@
       },
       "channelPolicies": {
         "type": "object",
-        "description": "Per-channel access control. Keys are conversation channel IDs (e.g., C_ENGINEERING), 'DM', or 'default'. Each entry defines which providers and tools are available.",
+        "description": "Per-channel access control. Keys are conversation channel IDs (e.g., 'C_ENGINEERING'), 'DM', or 'default'. Each entry defines which providers and tools are allowed.",
         "additionalProperties": {
           "type": "object",
           "properties": {
@@ -153,7 +151,7 @@
                   "tools": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Tool name patterns (relative to provider prefix). Use '*' for all, 'list_*' for prefix match."
+                    "description": "Tool name patterns. Use '*' for all, 'list_*' for prefix match."
                   }
                 },
                 "required": ["tools"]
@@ -161,7 +159,7 @@
             },
             "userOverrides": {
               "type": "object",
-              "description": "Per-user overrides within this channel. Replaces (not merges) the channel defaults.",
+              "description": "Per-user overrides within this channel. Replaces (does not merge) the channel defaults.",
               "additionalProperties": {
                 "type": "object",
                 "properties": {
@@ -170,10 +168,7 @@
                     "additionalProperties": {
                       "type": "object",
                       "properties": {
-                        "tools": {
-                          "type": "array",
-                          "items": { "type": "string" }
-                        }
+                        "tools": { "type": "array", "items": { "type": "string" } }
                       },
                       "required": ["tools"]
                     }
@@ -185,14 +180,6 @@
           },
           "required": ["providers"]
         }
-      },
-      "callbackBaseUrl": {
-        "type": "string",
-        "description": "Base URL for OAuth callbacks (e.g., https://your-domain.com). Required for OAuth providers."
-      },
-      "rateLimitPerUserPerMinute": {
-        "type": "number",
-        "description": "Max tool calls per user per provider per minute. Default: 60."
       }
     },
     "required": ["providers"]

@@ -1,36 +1,33 @@
 {
   "name": "openclaw-credential-vault",
   "version": "0.1.0",
-  "description": "Generic per-user credential vault plugin for OpenClaw — OAuth, API keys, MCP bridge, and auth gating.",
+  "description": "Per-user credential vault middleware for OpenClaw — generic OAuth2/API key auth, vault_fetch tool, channel-scoped identity, audit log.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "lint": "eslint src/ index.ts",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "dev": "tsc --watch"
   },
   "keywords": [
     "openclaw",
     "plugin",
     "oauth",
     "credential-vault",
-    "mcp",
-    "authentication"
+    "authentication",
+    "middleware",
+    "vault-fetch"
   ],
   "license": "MIT",
   "dependencies": {
+    "@sinclair/typebox": "^0.34.0",
     "better-sqlite3": "^11.0.0",
-    "dotenv": "^17.4.0",
-    "zod": "^3.23.0"
+    "dotenv": "^17.4.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "typescript": "^5.5.0"
   },
   "peerDependencies": {
     "openclaw": ">=0.1.0"
